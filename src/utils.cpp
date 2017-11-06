@@ -122,6 +122,22 @@ int find_sexp_type (const Rcpp::RObject& incoming) {
 
 /* DelayedArray utilities. */
 
+Rcpp::RObject realize_delayed_array (const Rcpp::RObject& incoming) { 
+    Rcpp::Environment delayenv("package:DelayedArray");
+    Rcpp::Function realfun=delayenv["realize"];
+    return realfun(incoming);
+}
+
+Rcpp::RObject delayed_seed_to_HDF5Matrix(const Rcpp::RObject& seed) {
+    std::string matclass="HDF5Matrix";
+    Rcpp::S4 h5mat(matclass);
+    if (!h5mat.hasSlot("seed")) {
+        throw_custom_error("missing 'seed' slot in ", matclass, " object");
+    }
+    h5mat.slot("seed") = seed;
+    return Rcpp::RObject(h5mat);
+}
+
 bool is_pristine_delayed_array(const Rcpp::RObject& in) {
     const Rcpp::Environment env=Rcpp::Environment::namespace_env("DelayedArray");
     Rcpp::Function fun=env["is_pristine"];
@@ -130,12 +146,6 @@ bool is_pristine_delayed_array(const Rcpp::RObject& in) {
         throw std::runtime_error("pristine check should return a logical scalar");
     }
     return out[0];
-}
-
-Rcpp::RObject realize_delayed_array(const Rcpp::RObject& in) {
-    Rcpp::Environment delayenv("package:DelayedArray");
-    Rcpp::Function realfun=delayenv["realize"];
-    return realfun(in);
 }
 
 }

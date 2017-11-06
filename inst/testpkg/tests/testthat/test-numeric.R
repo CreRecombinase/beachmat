@@ -205,25 +205,58 @@ test_that("HDF5 numeric matrix input is okay", {
 
 # Testing delayed operations
 
-sub_hFUN <- function() {
-    A <- hFUN(15, 10)    
-    A[1:10,]
-}
-
-add_hFUN <- function() {
-    hFUN(15, 10) + 1
-}
-
+set.seed(91283)
+library(DelayedArray)
 test_that("Delayed numeric matrix input is okay", {
-    expect_s4_class(sub_hFUN(), "DelayedMatrix")
-    beachtest:::check_numeric_mat(sub_hFUN) 
-    beachtest:::check_type(sub_hFUN, expected="double")
-    
+    # HDF5-based seed.
+    hdf5.funs <- beachtest:::delayed_funs(hFUN)
+    for (FUN in hdf5.funs) {
+        expect_s4_class(FUN(), "DelayedMatrix")
+        beachtest:::check_numeric_mat(FUN)
+        beachtest:::check_type(FUN, expected="double")
+    }
+
+    # Sparse seed.
+    sparse.funs <- beachtest:::delayed_funs(csFUN)
+    for (FUN in sparse.funs) {
+        expect_s4_class(FUN(), "DelayedMatrix")
+        beachtest:::check_numeric_mat(FUN)
+        beachtest:::check_type(FUN, expected="double")
+    }
+
+    # Simple seed.
+    simple.funs <- beachtest:::delayed_funs(sFUN)
+    for (FUN in simple.funs) {
+        expect_s4_class(FUN(), "DelayedMatrix")
+        beachtest:::check_numeric_mat(FUN)
+        beachtest:::check_type(FUN, expected="double")
+    }
+
+    # Trigger realization.
+    add_hFUN <- function(..., transpose=FALSE) {
+        out <- hFUN(...) + 1
+        if (transpose) {
+            out <- DelayedArray::t(out)
+        }
+        return(out)
+    }
     expect_s4_class(add_hFUN(), "DelayedMatrix")
-    beachtest:::check_numeric_mat(add_hFUN) 
+    beachtest:::check_numeric_mat(add_hFUN)
     beachtest:::check_type(add_hFUN, expected="double")
-    
-    expect_identical("logical", .Call(beachtest:::cxx_test_type_check, hFUN() > 0)) # Proper type check!
+ 
+    expect_s4_class(add_hFUN(transpose=TRUE), "DelayedMatrix")
+    beachtest:::check_numeric_mat(add_hFUN, transpose=TRUE) # checking that transposition WITH delayed ops wipes the transformer.
+    beachtest:::check_type(add_hFUN, transpose=TRUE, expected="double")
+
+    comb_hFUN <- function(...) {
+        DelayedArray::cbind(hFUN(...), hFUN(...))
+    }
+    expect_s4_class(comb_hFUN(), "DelayedMatrix")
+    beachtest:::check_numeric_mat(comb_hFUN) # checking that odd seed types are properly realized.
+    beachtest:::check_type(comb_hFUN, expected="double")
+     
+    # Proper type check!
+    expect_identical("logical", .Call(beachtest:::cxx_test_type_check, hFUN() > 0)) 
 })
 
 #######################################################
@@ -263,29 +296,33 @@ test_that("Numeric matrix input error generation is okay", {
 set.seed(12345)
 
 test_that("Simple numeric matrix output is okay", {
-    beachtest:::check_numeric_output_mat(sFUN, hdf5.out=FALSE)
+    beachtest:::check_numeric_output_mat(sFUN)
+    beachtest:::check_numeric_output_mat(sFUN, nr=5, nc=30)
     
-    beachtest:::check_numeric_output_slice(sFUN, by.row=1:12, by.col=3:7, hdf5.out=FALSE)  
+    beachtest:::check_numeric_output_slice(sFUN, by.row=1:12, by.col=3:7)
+    beachtest:::check_numeric_output_slice(sFUN, nr=5, nc=30, by.row=2:4, by.col=12:25)
 })
 
 # Testing HDF5 sparse output:
 
 test_that("Sparse numeric matrix output is okay", {
-    beachtest:::check_sparse_numeric_output(csFUN)
-    beachtest:::check_sparse_numeric_output(csFUN, d=0.2)
-    beachtest:::check_sparse_numeric_output(csFUN, d=0.5)
+    beachtest:::check_numeric_output_mat(csFUN)
+    beachtest:::check_numeric_output_mat(csFUN, d=0.2)
+    beachtest:::check_numeric_output_mat(csFUN, d=0.5)
 
-    beachtest:::check_sparse_numeric_output_slice(csFUN, by.row=1:5, by.col=7:9)
-    beachtest:::check_sparse_numeric_output_slice(csFUN, by.row=1, by.col=2:8, d=0.2)
-    beachtest:::check_sparse_numeric_output_slice(csFUN, by.row=3:9, by.col=5, d=0.5)
+    beachtest:::check_numeric_output_slice(csFUN, by.row=1:5, by.col=7:9)
+    beachtest:::check_numeric_output_slice(csFUN, by.row=1, by.col=2:8, d=0.2)
+    beachtest:::check_numeric_output_slice(csFUN, by.row=3:9, by.col=5, d=0.5)
 })
 
 # Testing HDF5 numeric output:
 
 test_that("HDF5 numeric matrix output is okay", {
-    beachtest:::check_numeric_output_mat(hFUN, hdf5.out=TRUE)
+    beachtest:::check_numeric_output_mat(hFUN)
+    beachtest:::check_numeric_output_mat(hFUN, nr=5, nc=30)
     
-    beachtest:::check_numeric_output_slice(hFUN, by.row=1:2, by.col=2:10, hdf5.out=TRUE)
+    beachtest:::check_numeric_output_slice(hFUN, by.row=1:2, by.col=2:10)
+    beachtest:::check_numeric_output_slice(hFUN, nr=5, nc=30, by.row=1:2, by.col=2:10)
 
     beachtest:::check_numeric_order(hFUN)
 })
@@ -293,9 +330,9 @@ test_that("HDF5 numeric matrix output is okay", {
 # Testing conversions:
 
 test_that("Numeric matrix output conversions are okay", {
-    beachtest:::check_numeric_converted_output(sFUN, hdf5.out=FALSE)
+    beachtest:::check_numeric_converted_output(sFUN)
     
-    beachtest:::check_numeric_converted_output(hFUN, hdf5.out=TRUE)
+    beachtest:::check_numeric_converted_output(hFUN)
 })
 
 # Testing mode choices:

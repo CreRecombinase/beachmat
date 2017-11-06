@@ -195,25 +195,58 @@ test_that("HDF5 logical matrix input is okay", {
 
 # Testing delayed operations
 
-sub_hFUN <- function() {
-    A <- hFUN(15, 10)    
-    A[1:10,]
-}
-
-alt_hFUN <- function() {
-    !hFUN(15, 10)
-}
-
+set.seed(928374)
+library(DelayedArray)
 test_that("Delayed logical matrix input is okay", {
-    expect_s4_class(sub_hFUN(), "DelayedMatrix")
-    beachtest:::check_logical_mat(sub_hFUN) 
-    beachtest:::check_type(sub_hFUN, expected="logical")
-    
+    # HDF5-based seed.
+    hdf5.funs <- beachtest:::delayed_funs(hFUN)
+    for (FUN in hdf5.funs) {
+        expect_s4_class(FUN(), "DelayedMatrix")
+        beachtest:::check_logical_mat(FUN)
+        beachtest:::check_type(FUN, expected="logical")
+    }
+
+    # Sparse seed.
+    sparse.funs <- beachtest:::delayed_funs(csFUN)
+    for (FUN in sparse.funs) {
+        expect_s4_class(FUN(), "DelayedMatrix")
+        beachtest:::check_logical_mat(FUN)
+        beachtest:::check_type(FUN, expected="logical")
+    }
+
+    # Simple seed.
+    simple.funs <- beachtest:::delayed_funs(sFUN)
+    for (FUN in simple.funs) {
+        expect_s4_class(FUN(), "DelayedMatrix")
+        beachtest:::check_logical_mat(FUN)
+        beachtest:::check_type(FUN, expected="logical")
+    }
+
+    # Trigger realization.
+    alt_hFUN <- function(..., transpose=FALSE) {
+        out <- !hFUN(...)
+        if (transpose) {
+            out <- DelayedArray::t(out)
+        }
+        return(out)
+    }
     expect_s4_class(alt_hFUN(), "DelayedMatrix")
-    beachtest:::check_logical_mat(alt_hFUN) 
+    beachtest:::check_logical_mat(alt_hFUN)
     beachtest:::check_type(alt_hFUN, expected="logical")
-    
-    expect_identical("integer", .Call(beachtest:::cxx_test_type_check, hFUN()+1L)) # Proper type check!
+ 
+    expect_s4_class(alt_hFUN(transpose=TRUE), "DelayedMatrix")
+    beachtest:::check_logical_mat(alt_hFUN, transpose=TRUE) # checking that transposition WITH delayed ops wipes the transformer.
+    beachtest:::check_type(alt_hFUN, transpose=TRUE, expected="logical")
+
+    comb_hFUN <- function(...) {
+        DelayedArray::cbind(hFUN(...), hFUN(...))
+    }
+    expect_s4_class(comb_hFUN(), "DelayedMatrix")
+    beachtest:::check_logical_mat(comb_hFUN) # checking that odd seed types are properly realized.
+    beachtest:::check_type(comb_hFUN, expected="logical")
+     
+    # Proper type check!
+    expect_identical("integer", .Call(beachtest:::cxx_test_type_check, hFUN()+1L)) 
 })
 
 #######################################################
@@ -253,17 +286,33 @@ test_that("Logical matrix input error generation is okay", {
 set.seed(12345)
 
 test_that("Simple logical matrix output is okay", {
-    beachtest:::check_logical_output_mat(sFUN, hdf5.out=FALSE)
+    beachtest:::check_logical_output_mat(sFUN)
+    beachtest:::check_logical_output_mat(sFUN, nr=5, nc=30)
 
-    beachtest:::check_logical_output_slice(sFUN, by.row=10:13, by.col=2:5, hdf5.out=FALSE)
+    beachtest:::check_logical_output_slice(sFUN, by.row=10:13, by.col=2:5)
+    beachtest:::check_logical_output_slice(sFUN, nr=5, nc=30, by.row=1:3, by.col=2:25)
+})
+
+# Testing sparse logical output:
+
+test_that("Sparse logical matrix output is okay", {
+    beachtest:::check_logical_output_mat(csFUN)
+    beachtest:::check_logical_output_mat(csFUN, d=0.2)
+    beachtest:::check_logical_output_mat(csFUN, d=0.5)
+    
+    beachtest:::check_logical_output_slice(csFUN, by.row=2:10, by.col=2:9)
+    beachtest:::check_logical_output_slice(csFUN, by.row=1:12, by.col=3:7, d=0.2)
+    beachtest:::check_logical_output_slice(csFUN, by.row=3:9, by.col=5:8, d=0.5)
 })
 
 # Testing HDF5 logical output:
 
 test_that("HDF5 logical matrix output is okay", {
-    beachtest:::check_logical_output_mat(hFUN, hdf5.out=TRUE)
+    beachtest:::check_logical_output_mat(hFUN)
+    beachtest:::check_logical_output_mat(hFUN, nr=5, nc=30)
 
-    beachtest:::check_logical_output_slice(hFUN, by.row=12:15, by.col=1:5, hdf5.out=TRUE)
+    beachtest:::check_logical_output_slice(hFUN, by.row=12:15, by.col=1:5)
+    beachtest:::check_logical_output_slice(hFUN, nr=5, nc=30, by.row=2:5, by.col=1:15)
 
     beachtest:::check_logical_order(hFUN)
 })
@@ -271,9 +320,9 @@ test_that("HDF5 logical matrix output is okay", {
 # Testing conversions:
 
 test_that("Logical matrix output conversions are okay", {
-    beachtest:::check_logical_converted_output(sFUN, hdf5.out=FALSE)
+    beachtest:::check_logical_converted_output(sFUN)
 
-    beachtest:::check_logical_converted_output(hFUN, hdf5.out=TRUE)
+    beachtest:::check_logical_converted_output(hFUN)
 })
 
 # Testing mode choices:
